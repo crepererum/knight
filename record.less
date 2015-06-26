@@ -1,0 +1,357 @@
+/**
+ * This file is part of CERN Analysis Preservation Framework.
+ * Copyright (C) 2015 CERN.
+ *
+ * CERN Analysis Preservation Framework is free software; you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * CERN Analysis Preservation Framework is distributed in the hope that
+ * it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ * PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this software; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307,
+ * USA.
+ */
+
+.jsonrecord {
+    text-align: initial;
+
+    label {
+        display: inline-block;
+        width: 20%;
+    }
+
+    .row {
+        margin: 0;
+    }
+
+    .form-control {
+        display: inline-block;
+        height: 38px;
+        padding: 6px 12px;
+        width: 80%;
+    }
+
+    .form-control[disabled] {
+        background-color: #FFF;
+        cursor: initial;
+    }
+
+    .form-control.select2-container {
+        display: inline-block;
+        padding: 6px 12px;
+    }
+
+    .select2-container.select2-container-disabled .select2-choice {
+        background-color: #FFF;
+        border: none;
+        cursor: text;
+        padding: 0;
+
+        -webkit-user-select: all;
+        -moz-user-select: all;
+        -ms-user-select: all;
+        user-select: all;
+
+        .select2-arrow {
+            display: none;
+        }
+    }
+}
+
+.jsonrecord-blob {
+    display: none;
+}
+
+.jsonrecord-brief {
+    height: 200px;
+    overflow: hidden;
+
+    .jsonrecord-rendered {
+        filter: contrast(120%);
+        font-family: monospace;
+        transform: scale(0.5);
+        transform-origin: 0 0;
+        width: 200%;
+
+        *:not(i) {
+            font-weight: 700 !important;
+            letter-spacing: 2px !important;
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            user-select: none !important;
+        }
+
+        > div > h3:first-child {
+            margin-top: 0;
+        }
+    }
+}
+
+.jsonrecord-briefarea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    z-index: 10;
+
+
+    cursor: pointer;
+}
+
+.jsonrecord-brieflink {
+    transition: filter 1s;
+
+    color: inherit;
+    display: inline-block;
+    position: relative;
+}
+
+.jsonrecord-brieflink:focus, .jsonrecord-brieflink:hover {
+    color: inherit;
+    filter: brightness(105%);
+    text-decoration: none;
+}
+
+.jsonrecord-loading {
+    font-weight: 700;
+    text-align: center;
+}
+
+.jsonrecord-metadata {
+    text-align: initial;
+
+    .col-md-2 {
+        font-weight: 700;
+        text-align: right;
+    }
+}
+
+.knight-main {
+    background-color: #fff;
+}
+
+.knight-boolean > .knight-b > input {
+    display: inline-block;
+    width: 20px;
+}
+
+// fix array counter alignment
+.knight-array {
+    list-style-position: inside;
+}
+
+.knight-arrayrow {
+    border-top: 1px solid rgb(180, 180, 180);
+}
+
+.knight-arrayrow:first-child {
+    border-top: none;
+}
+
+.knight-arrayrow,
+.knight-objectrow {
+    clear: left;
+    float: left;
+    width: 100%;
+}
+
+.knight-arraybody,
+.knight-objectbody {
+    float: left;
+    padding-top: 10px;
+    width: 100%;
+}
+
+// array scrolling
+.knight-scrollhelper {
+    direction: rtl;
+    max-height: 400px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+
+    > * {
+        direction: ltr;
+        float: initial; // seems to be a bug
+    }
+}
+
+.knight-arrayrow > .knight-boolean,
+.knight-arrayrow > .knight-null,
+.knight-arrayrow > .knight-number,
+.knight-arrayrow > .knight-string,
+.knight-arrayrow > .knight-unknown {
+    width: 100%;
+}
+
+.knight-label {
+    float: left;
+    padding-right: 10px;
+    text-align: right;
+    width: 20%;
+}
+
+.knight-number {
+    input[type=number] {
+        background-color: inherit;
+        border: none;
+    }
+}
+
+.knight-null {
+    font-style: italic;
+}
+
+.knight-array,
+.knight-object {
+    float: left;
+    display: block;
+    padding-left: 20px;
+    width: 100%;
+}
+
+.knight-array {
+    > .knight-marginhelper {
+        border-left: 2px dotted black;
+    }
+}
+
+.knight-object {
+    > .knight-marginhelper {
+        border-left: 2px solid black;
+    }
+}
+
+.knight-arrayhead,
+.knight-objecthead {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+
+    cursor: pointer;
+    padding-right: 10px;
+}
+
+// add spacing below objects/arrays, when they are attribute values
+.knight-objectrow > .knight-sub {
+    > .knight-object,
+    > .knight-array {
+        padding-bottom: 10px;
+    }
+}
+
+// remove spacing from the most outer object
+.knight-main > .knight-object {
+    padding: 0;
+}
+
+.knight-boolean,
+.knight-null,
+.knight-number,
+.knight-string,
+.knight-unknown {
+    float: left;
+
+    > .knight-a {
+        display: block;
+        float: left;
+        width: 26px;
+
+        > i {
+            line-height: 26px;
+        }
+    }
+    > .knight-b {
+        display: block;
+        margin-left: 26px;
+        padding-right: 10px;
+    }
+}
+
+.knight-null,
+.knight-number,
+.knight-string,
+.knight-unknown {
+    .knight-b > input {
+        width: 100%;
+    }
+}
+
+
+.knight-sub > .knight-boolean,
+.knight-sub > .knight-null,
+.knight-sub > .knight-number,
+.knight-sub > .knight-string,
+.knight-sub > .knight-unknown {
+    width: 80%;
+}
+
+.knight-unkown {
+    color: red;
+}
+
+.knight-end {
+    margin-bottom: 20px;
+}
+
+.knight-marginhelper {
+    background-color: rgba(220, 220, 220, 0.3);
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    float: left;
+    padding: 10px;
+    padding-right: 0;
+    width: 100%;
+}
+
+.knight-ringcontainer {
+    height: 100px;
+    width: 100px;
+    border-radius: 50px;
+
+    position: fixed;
+
+    background-color: rgb(180, 180, 180);
+
+    z-index: 501;
+}
+
+.knight-cover {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 500;
+    height: 100%;
+    width: 100%;
+}
+
+.knight-ringicon {
+    display: inline-block;
+    height: 20px;
+    width: 20px;
+    line-height: 20px;
+}
+
+.knight-searchcontainer {
+    position: fixed;
+    width: 100%;
+    height: 50px;
+    left: 0;
+    bottom: 0;
+    background-color: rgb(180, 180, 180);
+    padding: 10px;
+    z-index: 501;
+}
+
+.knight-searchinput {
+    width: 100%;
+}
