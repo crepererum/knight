@@ -16,7 +16,11 @@
  * along with this software; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307,
  * USA.
+ *
  */
+
+/*eslint-env browser */
+/*eslint camelcase: 0, comma-dangle: [2, "always-multiline"], quotes: [2, "single"] */
 
 require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
   'use strict';
@@ -57,46 +61,117 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
         },
     };
 
+    // high performance event dispatcher
+    var eventDispatcher = {
+        _registry: {},
+
+        register: function(type, key, func) {
+            if (!(type in eventDispatcher._registry)) {
+                window.addEventListener(type, eventDispatcher._callback.bind(type));
+                eventDispatcher._registry[type] = {};
+            }
+
+            var regType = eventDispatcher._registry[type];
+            regType[key] = func;
+        },
+
+        bindToElement: function(element, key) {
+            if (!element.knight_events) {
+                element.knight_events = [];
+            }
+            if (element.knight_events.indexOf(key) === -1) {
+                element.knight_events.push(key);
+            }
+        },
+
+        _callback: function(evt) {
+            var element = evt.target;
+            var regType = eventDispatcher._registry[this];
+
+            // search for elements upward the hirarchy
+            do {
+                if (element.knight_events) {
+                    // go through events that are registered for this element
+                    for (var i = 0, ii = element.knight_events.length; i < ii; ++i) {
+                        var key = element.knight_events[i];
+                        if (key in regType) {
+                            evt.knight_target = element;
+                            var code = regType[key].apply(this, [evt, element]);
+                            if (!code) {
+                                evt.stopPropagation();
+                                evt.preventDefault();
+                                return;
+                            }
+                        }
+                    }
+                }
+            } while (element = element.parentNode);
+        },
+    };
+
+    function convertKeyEvents(evt) {
+        var name = '';
+
+        if (evt.ctrlKey) {
+            name += 'CTRL-';
+        }
+
+        switch(evt.keyCode) {
+            case 0x0D:
+                name += 'ENTER';
+                break;
+            case 0x1B:
+                name += 'ESCAPE';
+                break;
+            case 0x20:
+                name += 'SPACE';
+                break;
+            default:
+                name += 'UNKOWN';
+        }
+
+        var evt2 = new Event(name, {
+            bubbles: true,
+        });
+        evt.target.dispatchEvent(evt2);
+
+        return true;
+    }
+
+
     // cover to catch key events, lost focus clicks
     var cover = {
         create: function(target) {
             // element to cover page, for click handling
             var element = document.createElement('div');
+            element.id = 'knight-cover';
             element.className = 'knight-cover';
 
             element.knight_target = target;
+            element.knight_remove = cover.remove.bind(element);
             target.knight_cover = element;
 
-            element.addEventListener('click', cover.callbackClick.bind(element));
-            element.addEventListener('wheel', formHelpers.callbackEat);
+            eventDispatcher.bindToElement(element, 'coverClose');
+            eventDispatcher.bindToElement(document, 'coverClose');
+            eventDispatcher.bindToElement(element, 'eatScroll');
 
-            target.addEventListener('wheel', formHelpers.callbackEat);
+            eventDispatcher.bindToElement(target, 'eatScroll');
 
-            window.addEventListener('keydown', cover.callbackKeydown.bind(element));
             document.body.appendChild(element);
         },
 
-        callbackClick: function(evt) {
+        remove: function() {
             shim.remove(this.knight_target);
             shim.remove(this);
-
-            evt.stopPropagation();
         },
 
-        callbackKeydown: function(evt) {
-            // ESC
-            if (evt.keyCode == 0x1B) {
-                evt.stopPropagation();
-                evt.preventDefault();
-
-                shim.remove(this.knight_target);
-                shim.remove(this);
-            }
-
-            // CTRL-SPACE
-            if ((evt.keyCode == 0x20) && evt.ctrlKey) {
-                evt.stopPropagation();
-                evt.preventDefault();
+        callbackClose: function() {
+            var element = document.getElementById('knight-cover');
+            if (element) {
+                element.knight_remove();
+                return false;
+            } else {
+                return true;
             }
         },
     };
@@ -106,9 +181,35 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             window.addEventListener('keydown', searchBar.callbackGlobalKeydown.bind(element));
         },
 
+        addToHistory: function(entry) {
+            var h = JSON.parse(localStorage.getItem('searchHist')) || [];
+            h.push(entry);
+
+            // limit history length to 50
+            while (h.length > 50) {
+                h.shift();
+            }
+
+            localStorage.setItem('searchHist', JSON.stringify(h));
+            return h.length;
+        },
+
+        getFromHistory: function(pos) {
+            var h = JSON.parse(localStorage.getItem('searchHist')) || [];
+            if (h.length === 0 || pos <= 0) {
+                return '';
+            }
+            pos = Math.min(h.length, pos);
+            var idx = h.length - pos;
+            return {
+                entry: h[idx],
+                pos: pos,
+            };
+        },
+
         callbackGlobalKeydown: function(evt) {
             // CTRL-SPACE
-            if ((evt.keyCode == 0x20) && evt.ctrlKey) {
+            if ((evt.keyCode === 0x20) && evt.ctrlKey) {
                 evt.stopPropagation();
                 evt.preventDefault();
 
@@ -123,13 +224,18 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
                     cover.create(container);
 
+                    var i = document.createElement('i');
+                    i.className = 'fa fa-fw fa-search';
+
                     var input = document.createElement('input');
                     input.className = 'knight-searchinput';
                     container.knight_input = input;
+                    container.knight_historypos = 0;
+                    input.addEventListener('keydown', searchBar.callbackInput.bind(container));
 
                     container.addEventListener('keydown', searchBar.callbackLocalKeydown.bind(container));
 
-                    container.appendChild(input);
+                    formHelpers.create_ab(i, input, container);
                     document.body.appendChild(container);
                 }
 
@@ -139,53 +245,94 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
         callbackLocalKeydown: function(evt) {
             // ENTER
-            if (evt.keyCode == 0x0D) {
+            if (evt.keyCode === 0x0D) {
                 evt.stopPropagation();
                 evt.preventDefault();
 
-                var tokens = this.knight_input.value.split('.');
-                var match = this.knight_target.knight_match(tokens);
-                var expanded = '';
-                for (var i = 0; i < match.length; ++i) {
-                    if (match[i]) {
-                        if (match[i].expanded) {
-                            if (i > 0) {
-                                expanded += '.';
-                            }
-                            expanded += match[i].expanded;
-                        }
+                var query = this.knight_input.value.trim();
+                if (query.length > 0) {
+                    searchBar.addToHistory(query);
+                    this.knight_historypos = 0;
 
-                        if (match[i].element) {
-                            if (match[i].element.knight_show) {
-                                match[i].element.knight_show();
+                    var tokens = query.split('.');
+                    var match = this.knight_target.knight_match(tokens);
+                    var expanded = '';
+                    for (var i = 0, ii = match.length; i < ii; ++i) {
+                        if (match[i]) {
+                            if (match[i].expanded) {
+                                if (i > 0) {
+                                    expanded += '.';
+                                }
+                                expanded += match[i].expanded;
                             }
-                            var lastElement = match[i].element;
+
+                            if (match[i].element) {
+                                if (match[i].element.knight_show) {
+                                    match[i].element.knight_show();
+                                }
+                                var lastElement = match[i].element;
+                            }
                         }
                     }
-                }
-                this.knight_input.value = expanded;
-                if (lastElement) {
-                    lastElement.knight_focus();
+                    this.knight_input.value = expanded;
+                    this.knight_input.select();
+                    if (lastElement) {
+                        lastElement.knight_focus();
+                    }
                 }
             }
+        },
 
-            // CTRL-SPACE
-            if ((evt.keyCode == 0x20) && evt.ctrlKey) {
+        callbackInput: function(evt) {
+            // ArrowUp
+            if (evt.keyCode === 0x26) {
                 evt.stopPropagation();
                 evt.preventDefault();
+
+                // save current state
+                var current = this.knight_input.value.trim();
+                if (this.knight_historypos === 0 && current.length > 0) {
+                    this.knight_statesaved = current;
+                }
+
+                var hdata = searchBar.getFromHistory(Math.min(50, this.knight_historypos + 1));
+                this.knight_input.value = hdata.entry;
+                this.knight_historypos = hdata.pos;
+                this.knight_input.select();
+            }
+
+            // ArrowDown
+            if (evt.keyCode === 0x28) {
+                evt.stopPropagation();
+                evt.preventDefault();
+
+                if (this.knight_historypos > 0) {
+                    this.knight_historypos = Math.max(0, this.knight_historypos - 1);
+                    if (this.knight_historypos > 0) {
+                        var hdata = searchBar.getFromHistory(this.knight_historypos);
+                        this.knight_input.value = hdata.entry;
+                        this.knight_historypos = hdata.pos;
+                    } else {
+                        this.knight_input.value = this.knight_statesaved || '';
+                    }
+                    this.knight_input.select();
+                }
             }
         },
     };
 
     var ringMenu = {
         create: function(button, target) {
-            button.addEventListener('click', ringMenu.show.bind(target));
+            button.knight_target = target;
+            eventDispatcher.bindToElement(button, 'ringShow');
         },
 
-        show: function(evt) {
+        show: function(evt, button) {
             // ring menu
             var container = document.createElement('div');
             container.className = 'knight-ringcontainer';
+            container.setAttribute('tabindex', 0); // enables .focus()
+            container.knight_target = button.knight_target;
 
             // center container at mouse coords
             container.style.left = String(Math.max(evt.clientX - 50, 0)) + 'px';
@@ -195,67 +342,45 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             cover.create(container);
 
             // icons
-            var value = this.knight_value();
-            ringMenu.addIcon(container, 0, style.icons.iNull, ringMenu.callbackIcon.bind({
-                data: null,
-                target: this,
-                container: container,
-            }));
-            ringMenu.addIcon(container, 60, style.icons.iArray, ringMenu.callbackIcon.bind({
-                data: Array(value),
-                target: this,
-                container: container,
-            }));
-            ringMenu.addIcon(container, 2 * 60, style.icons.iString, ringMenu.callbackIcon.bind({
-                data: String(JSON.stringify(value)),
-                target: this,
-                container: container,
-            }));
-            ringMenu.addIcon(container, 3 * 60, style.icons.iObject, ringMenu.callbackIcon.bind({
-                data: {},
-                target: this,
-                container: container,
-            }));
-            ringMenu.addIcon(container, 4 * 60, style.icons.iNumber, ringMenu.callbackIcon.bind({
-                data: Number(value),
-                target: this,
-                container: container,
-            }));
-            ringMenu.addIcon(container, 5 * 60, style.icons.iBoolean, ringMenu.callbackIcon.bind({
-                data: false,
-                target: this,
-                container: container,
-            }));
+            var value = button.knight_target.knight_value();
+            ringMenu.addIcon(container, 0, style.icons.iNull, null);
+            ringMenu.addIcon(container, 60, style.icons.iArray, Array(value));
+            ringMenu.addIcon(container, 2 * 60, style.icons.iString, String(JSON.stringify(value)));
+            ringMenu.addIcon(container, 3 * 60, style.icons.iObject, {});
+            ringMenu.addIcon(container, 4 * 60, style.icons.iNumber, Number(value));
+            ringMenu.addIcon(container, 5 * 60, style.icons.iBoolean, false);
 
             document.body.appendChild(container);
+            container.focus();
 
-            evt.stopPropagation();
+            return false;
         },
 
-        addIcon: function(container, angle, className, callback) {
+        addIcon: function(container, angle, className, data) {
             var rad = angle / 360 * Math.PI * 2;
             var i = document.createElement('i');
             i.className = className + ' knight-ringicon';
             i.style.position = 'absolute';
+            i.knight_container = container;
+            i.knight_data = data;
 
             // polar coords, substract half of the icon dimensions
             i.style.left = String(50 + 30 * Math.sin(rad) - 10) + 'px';
             i.style.top = String(50 + 30 * Math.cos(rad) - 10) + 'px';
 
-            i.addEventListener('click', callback);
+            eventDispatcher.bindToElement(i, 'clickRingIcon');
             container.appendChild(i);
 
         },
 
-        callbackIcon: function(evt) {
-            shim.remove(this.target);
-            gen(this.data, this.target.knight_anchor);
+        callbackIcon: function(evt, icon) {
+            shim.remove(icon.knight_container.knight_target);
+            gen(icon.knight_data, icon.knight_container.knight_target.knight_anchor);
 
-            shim.remove(this.container.knight_cover);
-            shim.remove(this.container);
+            icon.knight_container.knight_cover.knight_remove();
 
-            evt.stopPropagation();
-        }
+            return false;
+        },
     };
 
     // helpers to build up the form
@@ -299,17 +424,21 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             this.knight_statehidden = true;
         },
 
-        show_hide_toggle: function() {
-            if (this.knight_statehidden) {
-                formHelpers.show.bind(this)();
+        show_hide_toggle: function(evt, element) {
+            var toggle = element.knight_toggle;
+            if (toggle.knight_statehidden) {
+                formHelpers.show.apply(toggle);
             } else {
-                formHelpers.hide.bind(this)();
+                formHelpers.hide.apply(toggle);
             }
+
+            return false;
         },
 
         callbackEat: function(evt) {
             evt.stopPropagation();
             evt.preventDefault();
+            return false;
         },
 
         focus: function() {
@@ -318,7 +447,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // align viewport at top+50px
             var rect = this.getBoundingClientRect();
             window.scrollBy(0, rect.top - 50);
-        }
+        },
     };
 
     var elementArray = {
@@ -353,13 +482,15 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // add button
             var plus = document.createElement('i');
             plus.className = style.icons.iAdd;
-            plus.addEventListener('click', elementArray.modifyAdd.bind(container));
+            plus.knight_container = container;
+            eventDispatcher.bindToElement(plus, 'arrayModifyAdd');
             head.appendChild(plus);
 
             // delete button
             var minus = document.createElement('i');
             minus.className = style.icons.iRemove;
-            minus.addEventListener('click', elementArray.modifyDelete.bind(container));
+            minus.knight_container = container;
+            eventDispatcher.bindToElement(minus, 'arrayModifyDelete');
             head.appendChild(minus);
 
             // counter
@@ -371,13 +502,14 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // show-hide toggle
             var toggle = document.createElement('i');
             toggle.knight_target = scrollhelper;
-            head.addEventListener('click', formHelpers.show_hide_toggle.bind(toggle));
+            head.knight_toggle = toggle;
+            eventDispatcher.bindToElement(head, 'showHideToggle');
             head.appendChild(toggle);
             container.knight_show = formHelpers.show.bind(toggle);
             container.knight_hide = formHelpers.hide.bind(toggle);
 
             // array data
-            for (var i = 0; i < data.length; ++i) {
+            for (var i = 0, ii = data.length; i < ii; ++i) {
                 elementArray.genSub(data[i], container);
             }
 
@@ -406,7 +538,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             var element = this;
 
             var result = [];
-            for (var i = 0; i < element.knight_subs.length; ++i) {
+            for (var i = 0, ii = element.knight_subs.length; i < ii; ++i) {
                 var sub = element.knight_subs[i];
                 result.push(sub.knight_value());
             }
@@ -422,8 +554,8 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             container.knight_subs.push(subcontainer);
         },
 
-        modifyAdd: function(evt) {
-            var container = this;
+        modifyAdd: function(evt, element) {
+            var container = element.knight_container;
 
             // try to copy the last element
             var data = null;
@@ -434,11 +566,11 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             elementArray.genSub(data, container);
             shim.textContentSet(container.knight_counter, container.knight_subs.length);
 
-            evt.stopPropagation();
+            return false;
         },
 
-        modifyDelete: function(evt) {
-            var container = this;
+        modifyDelete: function(evt, element) {
+            var container = element.knight_container;
 
             if (container.knight_subs.length > 0) {
                 container.knight_subs.pop();
@@ -446,7 +578,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
                 shim.textContentSet(container.knight_counter, container.knight_subs.length);
             }
 
-            evt.stopPropagation();
+            return false;
         },
 
         match: function(tokens) {
@@ -599,13 +731,15 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // add button
             var plus = document.createElement('i');
             plus.className = style.icons.iAdd;
-            plus.addEventListener('click', elementObject.modifyAdd.bind(container));
+            plus.knight_container = container;
+            eventDispatcher.bindToElement(plus, 'objectModifyAdd');
             head.appendChild(plus);
 
             // delete button
             var minus = document.createElement('i');
             minus.className = style.icons.iRemove;
-            minus.addEventListener('click', elementObject.modifyDelete.bind(container));
+            minus.knight_container = container;
+            eventDispatcher.bindToElement(minus, 'objectModifyDelete');
             head.appendChild(minus);
 
             // counter
@@ -616,14 +750,15 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
             // show-hide toggle
             var toggle = document.createElement('i');
+            head.knight_toggle = toggle;
             toggle.knight_target = body;
-            head.addEventListener('click', formHelpers.show_hide_toggle.bind(toggle));
+            eventDispatcher.bindToElement(head, 'showHideToggle');
             head.appendChild(toggle);
             container.knight_show = formHelpers.show.bind(toggle);
             container.knight_hide = formHelpers.hide.bind(toggle);
 
             // add content
-            for (var i = 0; i < keys.length; ++i) {
+            for (var i = 0, ii = keys.length; i < ii; ++i) {
                 var k = keys[i];
                 var v = data[k];
                 elementObject.genSub(k, v, container);
@@ -654,7 +789,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             var element = this;
 
             var result = {};
-            for (var i = 0; i < element.knight_subs.length; ++i) {
+            for (var i = 0, ii = element.knight_subs.length; i < ii; ++i) {
                 var sub = element.knight_subs[i];
                 result[sub.knight_key()] = sub.knight_value();
             }
@@ -662,18 +797,12 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
         },
 
         valueLabel: function() {
-            // get bind context
-            var element = this;
-
             // get text content without newline
-            return shim.textContentGet(element).replace(/\n/g, '');
+            return shim.textContentGet(this).replace(/\n/g, '');
         },
 
         valueInput: function() {
-            // get bind context
-            var element = this;
-
-            return element.knight_value();
+            return this.knight_value();
         },
 
         genSub: function(k, v, container) {
@@ -701,8 +830,8 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             container.knight_subs.push(subcontainer);
         },
 
-        modifyAdd: function(evt) {
-            var container = this;
+        modifyAdd: function(evt, element) {
+            var container = element.knight_container;
 
             // try to copy the last element
             var k = 'new';
@@ -718,8 +847,8 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             evt.stopPropagation();
         },
 
-        modifyDelete: function(evt) {
-            var container = this;
+        modifyDelete: function(evt, element) {
+            var container = element.knight_container;
 
             if (container.knight_subs.length > 0) {
                 container.knight_subs.pop();
@@ -742,7 +871,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
                 var bestV = null;
                 var expanded = null;
                 var score = 0;
-                for (var i = 0; i < container.knight_subs.length; ++i) {
+                for (var i = 0, ii = container.knight_subs.length; i < ii; ++i) {
                     var k = container.knight_subs[i].knight_key();
                     var v = container.knight_subs[i].knight_input;
                     var m = re.exec(k);
@@ -832,9 +961,6 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
         },
 
         value: function() {
-            // get bind context
-            var element = this;
-
             return this.value;
         },
     };
@@ -885,7 +1011,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
                 // process child nodes
                 var subsingle = element.childNodes.length < 2;
-                for (var i = 0; i < element.childNodes.length; ++i) {
+                for (var i = 0, ii = element.childNodes.length; i < ii; ++i) {
                     parts.push(shim.textContentGet(element.childNodes[i], subsingle));
                 }
 
@@ -902,7 +1028,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
             // add one child per newline
             var parts = String(s).split('\n');
-            for (var i = 0; i < parts.length; ++i) {
+            for (var i = 0, ii = parts.length; i < ii; ++i) {
                 if (i > 0) {
                     var br = document.createElement('br');
                     element.appendChild(br);
@@ -928,6 +1054,23 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
         },
     };
 
+
+    // event dispatcher table
+    eventDispatcher.register('keydown', 'keyConvert', convertKeyEvents);
+    eventDispatcher.register('click', 'showHideToggle', formHelpers.show_hide_toggle);
+    eventDispatcher.register('click', 'ringShow', ringMenu.show);
+    eventDispatcher.register('click', 'clickRingIcon', ringMenu.callbackIcon);
+    eventDispatcher.register('click', 'coverClose', cover.callbackClose);
+    eventDispatcher.register('click', 'arrayModifyAdd', elementArray.modifyAdd);
+    eventDispatcher.register('click', 'arrayModifyDelete', elementArray.modifyDelete);
+    eventDispatcher.register('click', 'objectModifyAdd', elementObject.modifyAdd);
+    eventDispatcher.register('click', 'objectModifyDelete', elementObject.modifyDelete);
+    eventDispatcher.register('wheel', 'eatScroll', formHelpers.callbackEat);
+    eventDispatcher.register('ESCAPE', 'coverClose', cover.callbackClose);
+    eventDispatcher.register('ENTER', 'coverClose', cover.callbackClose);
+
+    eventDispatcher.bindToElement(document, 'keyConvert');
+
     $('.jsonrecord').each(function() {
         var element = this;
         $.getJSON($(element).data('schema'), function(schema) {
@@ -940,7 +1083,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // create document fragment to avoid reflows
             var fragment = document.createDocumentFragment();
             var fragment_div = document.createElement('div');
-            fragment_div.className = 'knight-main'
+            fragment_div.className = 'knight-main';
             fragment.appendChild(fragment_div);
 
             gen(json, fragment_div);
@@ -963,4 +1106,4 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
         });
     });
   });
-})
+});
