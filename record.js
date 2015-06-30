@@ -22,7 +22,7 @@
 /*eslint-env browser */
 /*eslint camelcase: 0, comma-dangle: [2, "always-multiline"], quotes: [2, "single"] */
 
-require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
+require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
   'use strict';
 
   $(function() {
@@ -171,6 +171,15 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
         addToHistory: function(entry) {
             var h = JSON.parse(localStorage.getItem('searchHist')) || [];
+
+            // test if element already exists
+            // if so, remove it
+            var idx = h.indexOf(entry);
+            if (idx > -1) {
+                h.splice(idx, 1);
+            }
+
+            // add element to the end
             h.push(entry);
 
             // limit history length to 50
@@ -565,32 +574,66 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             var container = this;
 
             if (tokens.length === 0) {
-                return null;
+                return [];
             } else {
-                var head = tokens.shift();
-                var index = parseInt(String(head).trim()) - 1;
-                var element = null;
-                var expanded = null;
-                var score = 0;
-                if (!isNaN(index) && index >= 0 && index < container.knight_subs.length) {
-                    element = container.knight_subs[index];
-                    expanded = String(index + 1);
-                    score = container.knight_subs.length;
-                }
+                var head = tokens[0];
+                var query = String(head).trim();
 
-                var result = [{
-                    token: head,
-                    expanded: expanded,
-                    element: element,
-                    score: score,
-                }];
-
-                if (element && element.knight_match) {
-                    var sub = element.knight_match(tokens);
-                    if (sub && sub[0]) {
-                        result.score += sub[0].score;
+                // wildcard or index?
+                if (query === '*') {
+                    // find best matching element
+                    var bestElement = null;
+                    var bestSub = [];
+                    var bestScore = 0;
+                    var bestIdx = null;
+                    for (var i = 0, ii = container.knight_subs.length; i < ii; ++i) {
+                        var element = container.knight_subs[i];
+                        var sub = element.knight_match(tokens.slice(1));
+                        if (sub[0]) {
+                            var score = sub[0].score;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestElement = element;
+                                bestSub = sub;
+                                bestIdx = String(i);
+                            }
+                        }
                     }
-                    result = result.concat(sub);
+
+                    var result = [{
+                        token: head,
+                        expanded: bestIdx,
+                        element: bestElement,
+                        score: bestScore,
+                    }];
+                    result = result.concat(bestSub);
+                } else {
+                    var index = parseInt(query) - 1;
+                    var element = null;
+                    var expanded = null;
+                    var score = 0;
+                    if (!isNaN(index) && index >= 0 && index < container.knight_subs.length) {
+                        element = container.knight_subs[index];
+                        expanded = String(index + 1);
+                        // that seems to be a nice function to me
+                        // normalized to [0,1] and depending on something like the entropy
+                        score = 1.0 - 1.0 / (1.0 + Math.log(1.0 + container.knight_subs.length));
+                    }
+
+                    var result = [{
+                        token: head,
+                        expanded: expanded,
+                        element: element,
+                        score: score,
+                    }];
+
+                    if (element && element.knight_match) {
+                        var sub = element.knight_match(tokens.slice(1));
+                        if (sub[0]) {
+                            result[0].score *= sub[0].score;
+                        }
+                        result = result.concat(sub);
+                    }
                 }
 
                 return result;
@@ -843,43 +886,45 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             var container = this;
 
             if (tokens.length === 0) {
-                return null;
+                return [];
             } else {
-                var head = tokens.shift();
-                var re = RegExp(String(head).trim(), 'i');
+                var head = tokens[0];
                 var bestK = null;
                 var bestV = null;
-                var expanded = null;
                 var score = 0;
-                for (var i = 0, ii = container.knight_subs.length; i < ii; ++i) {
-                    var k = container.knight_subs[i].knight_key();
-                    var v = container.knight_subs[i].knight_input;
-                    var m = re.exec(k);
 
-                    // was it a match?
-                    if (m) {
-                        var next = m[0];
-                        // was it better than the last one?
-                        if (!expanded || next.length > score) {
-                            expanded = next;
-                            bestV = v;
-                            bestK = k;
-                            score = next.length;
-                        }
-                    }
+                var keys = [];
+                for (var i = 0, ii = container.knight_subs.length; i < ii; ++i) {
+                    keys.push(container.knight_subs[i].knight_key().toLowerCase());
+                }
+                var f = new Fuse(keys, {
+                    includeScore: true,
+                });
+                var m = f.search(String(head).trim().toLowerCase());
+                if (m) {
+                    // get lowest score
+                    // FIXME do not sort the entire list
+                    m.sort(function(a, b) {
+                        return a.score - b.score;
+                    });
+                    var idx = m[0].item;
+                    bestK = container.knight_subs[idx].knight_key();
+                    bestV = container.knight_subs[idx].knight_input;
+                    score = 1.0 - m[0].score;
                 }
 
                 var result = [{
                     token: head,
                     expanded: bestK,
                     element: bestV,
+                    score: score,
                 }];
 
                 if (bestV && bestV.knight_match) {
                     if (bestV && bestV.knight_match) {
-                        var sub = bestV.knight_match(tokens);
-                        if (sub && sub[0]) {
-                            result.score += sub[0].score;
+                        var sub = bestV.knight_match(tokens.slice(1));
+                        if (sub[0]) {
+                            result[0].score *= sub[0].score;
                         }
                         result = result.concat(sub);
                     }
@@ -905,6 +950,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             formHelpers.create_ab(i, input, container);
             container.knight_value = elementString.value.bind(input);
             container.knight_focus = formHelpers.focus.bind(input);
+            container.knight_match = elementString.match.bind(container);
 
             shim.textContentSet(input, data);
 
@@ -916,6 +962,34 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             var element = this;
 
             return shim.textContentGet(element);
+        },
+
+        match: function(tokens) {
+            if (tokens.length === 0) {
+                return [];
+            } else {
+                var head = tokens[0];
+                var value = String(this.knight_value()).toLowerCase();
+                var f = new Fuse([value], {
+                    includeScore: true,
+                });
+                var m = f.search(String(head).trim().toLowerCase());
+                if (m.length > 0) {
+                    return [{
+                        token: head,
+                        expanded: value,
+                        element: this,
+                        score: 1.0 - m[0].score,
+                    }];
+                } else {
+                    return [{
+                        token: head,
+                        expanded: value,
+                        element: this,
+                        score: 0,
+                    }];
+                }
+            }
         },
     };
 
