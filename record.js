@@ -22,7 +22,7 @@
 /*eslint-env browser */
 /*eslint camelcase: 0, comma-dangle: [2, "always-multiline"], quotes: [2, "single"] */
 
-require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
+require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, Fuse, tv4) {
   'use strict';
 
   $(function() {
@@ -204,6 +204,34 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
             };
         },
 
+        searchViaString: function(query, anchor, show) {
+            var tokens = query.split('.');
+            var match = anchor.knight_match(tokens);
+            var expanded = '';
+            var lastElement = null;
+            for (var i = 0, ii = match.length; i < ii; ++i) {
+                if (match[i]) {
+                    if (match[i].expanded) {
+                        if (i > 0) {
+                            expanded += '.';
+                        }
+                        expanded += match[i].expanded;
+                    }
+
+                    if (match[i].element) {
+                        if (show && match[i].element.knight_show) {
+                            match[i].element.knight_show();
+                        }
+                        lastElement = match[i].element;
+                    }
+                }
+            }
+            return {
+                expanded: expanded,
+                element: lastElement,
+            }
+        },
+
         callbackSearchShow: function(evt) {
             // create if not exist
             var container = document.getElementById('knight-searchcontainer');
@@ -244,30 +272,11 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
                 searchBar.addToHistory(query);
                 container.knight_historypos = 0;
 
-                var tokens = query.split('.');
-                var match = container.knight_target.knight_match(tokens);
-                var expanded = '';
-                for (var i = 0, ii = match.length; i < ii; ++i) {
-                    if (match[i]) {
-                        if (match[i].expanded) {
-                            if (i > 0) {
-                                expanded += '.';
-                            }
-                            expanded += match[i].expanded;
-                        }
-
-                        if (match[i].element) {
-                            if (match[i].element.knight_show) {
-                                match[i].element.knight_show();
-                            }
-                            var lastElement = match[i].element;
-                        }
-                    }
-                }
-                container.knight_input.value = expanded;
+                var result = searchBar.searchViaString(query, container.knight_target, true);
+                container.knight_input.value = result.expanded;
                 container.knight_input.select();
-                if (lastElement) {
-                    lastElement.knight_focus();
+                if (result.element) {
+                    result.element.knight_focus();
                 }
             }
 
@@ -384,6 +393,8 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
             target.knight_hide = element.knight_hide;
             target.knight_match = element.knight_match;
             target.knight_focus = element.knight_focus;
+            target.knight_schema = element.knight_schema;
+            target.knight_element = element;
             element.knight_anchor = target;
         },
 
@@ -1041,6 +1052,14 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
     // might contain some black magic to make things work across browser
     // boundaries
     var shim = {
+        prependChild: function(element, child) {
+            if (element.firstChild) {
+                element.insertBefore(child, element.firstChild);
+            } else {
+                element.appendChild(child);
+            }
+        },
+
         textContentGet: function(element, single) {
             if (element.nodeType === 3) {
                 // textnode
@@ -1116,6 +1135,91 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
         },
     };
 
+    var annotations = {
+        clear: function(type) {
+            var oldErrors = document.getElementsByClassName('knight-annotation-' + type);
+            for (var i = 0, ii = oldErrors.length; i < ii; ++i) {
+                oldErrors[i].knight_target.classList.remove('knight-status-error');
+                shim.remove(oldErrors[i]);
+            }
+        },
+
+        add: function(type, msg, target) {
+            var anchor = document.createElement('div');
+            anchor.className = 'knight-annotation-' + type;
+            anchor.knight_target = target;
+
+            var container = document.createElement('div');
+            container.knight_target = target;
+
+            var i = document.createElement('i');
+            i.className = 'fa fa-fw fa-exclamation-triangle';
+
+            var p = document.createElement('p');
+            shim.textContentSet(p, msg);
+
+            formHelpers.create_ab(i, p, container);
+            eventDispatcher.bindToElement(container, 'annotationClick');
+
+            anchor.appendChild(container);
+            shim.prependChild(target, anchor);
+            target.classList.add('knight-status-error');
+        },
+
+        callbackClick: function(evt, element) {
+            element.knight_target.knight_focus();
+            return false;
+        },
+    };
+
+    function fullValidation(data, schema, callback) {
+        // FIXME thing about .validateMultiple
+        var result = tv4.validateResult(data, schema);
+
+        // external schema missing?
+        if (result.missing.length > 0) {
+            var url = result.missing[0];
+            // FIXME implement host whitelist
+            $.getJSON(url, function(subschema) {
+                tv4.addSchema(url, subschema);
+
+                // try again
+                fullValidation(data, schema, callback);
+            });
+        } else {
+            // clean up
+            annotations.clear('error');
+
+            if (!result.valid) {
+                // try to find affected element
+                var target = document.getElementById('knight-main').knight_element;
+                if (result.error.dataPath.length > 0) {
+                    var query = result.error.dataPath.replace(/\//g, '.').slice(1);
+                    var sresult = searchBar.searchViaString(query, target, true);
+                    if (sresult.element) {
+                        target = sresult.element.knight_element || sresult.element;
+                    }
+                }
+
+                // add annotations to obj tree
+                annotations.add('error', result.error.message, target);
+            }
+
+            if (callback) {
+                callback.apply(this, [result]);
+            }
+        }
+    }
+
+    function validationLoop() {
+        var element = document.getElementById('knight-main');
+        var schema = element.knight_schema;
+        var value = element.knight_value();
+        fullValidation(value, schema, function() {
+            window.setTimeout(validationLoop, 1000);
+        });
+    }
+
 
     // event dispatcher table
     eventDispatcher.register('keydown', 'keyConvert', convertKeyEvents);
@@ -1127,6 +1231,7 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
     eventDispatcher.register('click', 'arrayModifyDelete', elementArray.modifyDelete);
     eventDispatcher.register('click', 'objectModifyAdd', elementObject.modifyAdd);
     eventDispatcher.register('click', 'objectModifyDelete', elementObject.modifyDelete);
+    eventDispatcher.register('click', 'annotationClick', annotations.callbackClick);
     eventDispatcher.register('wheel', 'eatScroll', formHelpers.callbackEat);
     eventDispatcher.register('ESCAPE', 'coverClose', cover.callbackClose);
     eventDispatcher.register('ENTER', 'coverClose', cover.callbackClose);
@@ -1160,6 +1265,10 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
                 fragment_div.knight_show();
             }
 
+            // add schema
+            // FIXME set schema during generation, so it can influence the form
+            fragment_div.knight_schema = schema;
+
             // initialize search
             searchBar.create(fragment_div);
 
@@ -1170,6 +1279,9 @@ require(['jquery', 'base64', 'utf8', 'fuse'], function($, base64, utf8, Fuse) {
 
             target.appendChild(fragment);
             $(loading).remove();
+
+            // start validation loop
+            validationLoop();
         });
     });
   });

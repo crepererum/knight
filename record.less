@@ -379,3 +379,54 @@
     padding: 5px 10px;
     width: 100%;
 }
+
+.knight-status-error {
+    box-shadow: #d9534f 0 0 10px inset;
+}
+
+.knight-annotation-error {
+    position: relative;
+
+    > div {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        z-index: 400;
+        transform: translateX(-50%);
+
+        background-color: #d9534f;
+        border-radius: 3px;
+        color: #222;
+        cursor: default;
+        font-weight: 700;
+        padding: 10px;
+        width: 300px;
+        opacity: 0.8;
+
+        > .knight-a {
+            display: block;
+            float: left;
+            width: 26px;
+
+            > i {
+                line-height: 26px;
+            }
+        }
+        > .knight-b {
+            display: block;
+            margin-left: 26px;
+            padding-right: 10px;
+
+            > p {
+                line-height: 26px;
+                margin: 0;
+                padding: 0;
+                word-wrap: break-word;
+            }
+        }
+    }
+
+    > div:hover {
+        opacity: 0.2;
+    }
+}
