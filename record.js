@@ -116,19 +116,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             name += 'CTRL-';
         }
 
-        switch(evt.keyCode) {
-            case 0x0D:
-                name += 'ENTER';
-                break;
-            case 0x1B:
-                name += 'ESCAPE';
-                break;
-            case 0x20:
-                name += 'SPACE';
-                break;
-            default:
-                name += 'UNKOWN';
-        }
+        name += shim.keycodes[evt.keyCode] || 'UNKNOWN';
 
         var evt2 = new Event(name, {
             bubbles: true,
@@ -178,7 +166,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
 
     var searchBar = {
         create: function(element) {
-            window.addEventListener('keydown', searchBar.callbackGlobalKeydown.bind(element));
+            eventDispatcher.bindToElement(document, 'searchShow');
         },
 
         addToHistory: function(entry) {
@@ -207,117 +195,109 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             };
         },
 
-        callbackGlobalKeydown: function(evt) {
-            // CTRL-SPACE
-            if ((evt.keyCode === 0x20) && evt.ctrlKey) {
-                evt.stopPropagation();
-                evt.preventDefault();
+        callbackSearchShow: function(evt) {
+            // create if not exist
+            var container = document.getElementById('knight-searchcontainer');
+            if (!container) {
+                // construct searchbar
+                container = document.createElement('div');
+                container.id = 'knight-searchcontainer';
+                container.className = 'knight-searchcontainer';
+                container.knight_target = document.getElementById('knight-main');
 
-                // create if not exist
-                var container = document.getElementById('knight-searchcontainer');
-                if (!container) {
-                    // construct searchbar
-                    container = document.createElement('div');
-                    container.id = 'knight-searchcontainer';
-                    container.className = 'knight-searchcontainer';
-                    container.knight_target = this;
+                cover.create(container);
 
-                    cover.create(container);
+                var i = document.createElement('i');
+                i.className = 'fa fa-fw fa-search';
 
-                    var i = document.createElement('i');
-                    i.className = 'fa fa-fw fa-search';
+                var input = document.createElement('input');
+                input.className = 'knight-searchinput';
+                container.knight_input = input;
+                container.knight_historypos = 0;
+                input.knight_container = container;
+                eventDispatcher.bindToElement(input, 'historyUp');
+                eventDispatcher.bindToElement(input, 'historyDown');
 
-                    var input = document.createElement('input');
-                    input.className = 'knight-searchinput';
-                    container.knight_input = input;
-                    container.knight_historypos = 0;
-                    input.addEventListener('keydown', searchBar.callbackInput.bind(container));
+                eventDispatcher.bindToElement(container, 'searchSubmit');
 
-                    container.addEventListener('keydown', searchBar.callbackLocalKeydown.bind(container));
-
-                    formHelpers.create_ab(i, input, container);
-                    document.body.appendChild(container);
-                }
-
-                container.knight_input.focus();
+                formHelpers.create_ab(i, input, container);
+                document.body.appendChild(container);
             }
+
+            container.knight_input.focus();
+            return false;
         },
 
-        callbackLocalKeydown: function(evt) {
-            // ENTER
-            if (evt.keyCode === 0x0D) {
-                evt.stopPropagation();
-                evt.preventDefault();
+        callbackSearchSubmit: function(evt, element) {
+            var container = element;
+            var query = container.knight_input.value.trim();
+            if (query.length > 0) {
+                searchBar.addToHistory(query);
+                container.knight_historypos = 0;
 
-                var query = this.knight_input.value.trim();
-                if (query.length > 0) {
-                    searchBar.addToHistory(query);
-                    this.knight_historypos = 0;
-
-                    var tokens = query.split('.');
-                    var match = this.knight_target.knight_match(tokens);
-                    var expanded = '';
-                    for (var i = 0, ii = match.length; i < ii; ++i) {
-                        if (match[i]) {
-                            if (match[i].expanded) {
-                                if (i > 0) {
-                                    expanded += '.';
-                                }
-                                expanded += match[i].expanded;
+                var tokens = query.split('.');
+                var match = container.knight_target.knight_match(tokens);
+                var expanded = '';
+                for (var i = 0, ii = match.length; i < ii; ++i) {
+                    if (match[i]) {
+                        if (match[i].expanded) {
+                            if (i > 0) {
+                                expanded += '.';
                             }
+                            expanded += match[i].expanded;
+                        }
 
-                            if (match[i].element) {
-                                if (match[i].element.knight_show) {
-                                    match[i].element.knight_show();
-                                }
-                                var lastElement = match[i].element;
+                        if (match[i].element) {
+                            if (match[i].element.knight_show) {
+                                match[i].element.knight_show();
                             }
+                            var lastElement = match[i].element;
                         }
                     }
-                    this.knight_input.value = expanded;
-                    this.knight_input.select();
-                    if (lastElement) {
-                        lastElement.knight_focus();
-                    }
+                }
+                container.knight_input.value = expanded;
+                container.knight_input.select();
+                if (lastElement) {
+                    lastElement.knight_focus();
                 }
             }
+
+            return false;
         },
 
-        callbackInput: function(evt) {
-            // ArrowUp
-            if (evt.keyCode === 0x26) {
-                evt.stopPropagation();
-                evt.preventDefault();
+        callbackHistoryUp: function(evt, element) {
+            var container = element.knight_container;
 
-                // save current state
-                var current = this.knight_input.value.trim();
-                if (this.knight_historypos === 0 && current.length > 0) {
-                    this.knight_statesaved = current;
-                }
-
-                var hdata = searchBar.getFromHistory(Math.min(50, this.knight_historypos + 1));
-                this.knight_input.value = hdata.entry;
-                this.knight_historypos = hdata.pos;
-                this.knight_input.select();
+            // save current state
+            var current = container.knight_input.value.trim();
+            if (container.knight_historypos === 0 && current.length > 0) {
+                container.knight_statesaved = current;
             }
 
-            // ArrowDown
-            if (evt.keyCode === 0x28) {
-                evt.stopPropagation();
-                evt.preventDefault();
+            var hdata = searchBar.getFromHistory(Math.min(50, container.knight_historypos + 1));
+            container.knight_input.value = hdata.entry;
+            container.knight_historypos = hdata.pos;
+            container.knight_input.select();
 
-                if (this.knight_historypos > 0) {
-                    this.knight_historypos = Math.max(0, this.knight_historypos - 1);
-                    if (this.knight_historypos > 0) {
-                        var hdata = searchBar.getFromHistory(this.knight_historypos);
-                        this.knight_input.value = hdata.entry;
-                        this.knight_historypos = hdata.pos;
-                    } else {
-                        this.knight_input.value = this.knight_statesaved || '';
-                    }
-                    this.knight_input.select();
+            return false;
+        },
+
+        callbackHistoryDown: function(evt, element) {
+            var container = element.knight_container;
+
+            if (container.knight_historypos > 0) {
+                container.knight_historypos = Math.max(0, container.knight_historypos - 1);
+                if (container.knight_historypos > 0) {
+                    var hdata = searchBar.getFromHistory(container.knight_historypos);
+                    container.knight_input.value = hdata.entry;
+                    container.knight_historypos = hdata.pos;
+                } else {
+                    container.knight_input.value = container.knight_statesaved || '';
                 }
+                container.knight_input.select();
             }
+
+            return false;
         },
     };
 
@@ -1052,6 +1032,14 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
                 p.replaceChild(next, element);
             }
         },
+
+        keycodes: {
+            0x0D: 'ENTER',
+            0x1B: 'ESCAPE',
+            0x20: 'SPACE',
+            0x26: 'ARROWUP',
+            0x28: 'ARROWDOWN',
+        },
     };
 
 
@@ -1068,6 +1056,10 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
     eventDispatcher.register('wheel', 'eatScroll', formHelpers.callbackEat);
     eventDispatcher.register('ESCAPE', 'coverClose', cover.callbackClose);
     eventDispatcher.register('ENTER', 'coverClose', cover.callbackClose);
+    eventDispatcher.register('CTRL-SPACE', 'searchShow', searchBar.callbackSearchShow);
+    eventDispatcher.register('ENTER', 'searchSubmit', searchBar.callbackSearchSubmit);
+    eventDispatcher.register('ARROWUP', 'historyUp', searchBar.callbackHistoryUp);
+    eventDispatcher.register('ARROWDOWN', 'historyDown', searchBar.callbackHistoryDown);
 
     eventDispatcher.bindToElement(document, 'keyConvert');
 
@@ -1083,6 +1075,7 @@ require(['jquery', 'base64', 'utf8'], function($, base64, utf8) {
             // create document fragment to avoid reflows
             var fragment = document.createDocumentFragment();
             var fragment_div = document.createElement('div');
+            fragment_div.id = 'knight-main';
             fragment_div.className = 'knight-main';
             fragment.appendChild(fragment_div);
 
