@@ -58,6 +58,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             iObject: 'fa fa-fw fa-cube',
             iRemove: 'fa fa-fw fa-minus-circle',
             iString: 'fa fa-fw fa-font',
+            iUnknown: 'fa fa-fw fa-question',
         },
     };
 
@@ -84,8 +85,16 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             }
         },
 
-        _callback: function(evt) {
-            var element = evt.target;
+        dispatch: function(evt, target) {
+            if (evt.type in eventDispatcher._registry) {
+                return eventDispatcher._callback.apply(evt.type, [evt, target]);
+            } else {
+                return true;
+            }
+        },
+
+        _callback: function(evt, target) {
+            var element = target || evt.target;
             var regType = eventDispatcher._registry[this];
 
             // search for elements upward the hirarchy
@@ -100,12 +109,14 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                             if (!code) {
                                 evt.stopPropagation();
                                 evt.preventDefault();
-                                return;
+                                return false;
                             }
                         }
                     }
                 }
             } while (element = element.parentNode);
+
+            return true;
         },
     };
 
@@ -121,9 +132,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         var evt2 = new Event(name, {
             bubbles: true,
         });
-        evt.target.dispatchEvent(evt2);
-
-        return true;
+        return eventDispatcher.dispatch(evt2, evt.target);
     }
 
 
@@ -450,6 +459,52 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         },
     };
 
+    var mixinElementSimple = {
+        create: function(anchor, containerClassName, iconClassName, input, valueFunction) {
+            var container = document.createElement('div');
+            container.className = containerClassName;
+
+            var i = document.createElement('i');
+            ringMenu.create(i, container);
+            i.className = iconClassName;
+
+            formHelpers.create_ab(i, input, container);
+            container.knight_value = valueFunction.bind(input);
+            container.knight_focus = formHelpers.focus.bind(input);
+            container.knight_match = mixinElementSimple.match.bind(container);
+
+            formHelpers.bindToAnchor(container, anchor);
+        },
+
+        match: function(tokens) {
+            if (tokens.length === 0) {
+                return [];
+            } else {
+                var head = tokens[0];
+                var value = String(this.knight_value()).toLowerCase();
+                var f = new Fuse([value], {
+                    includeScore: true,
+                });
+                var m = f.search(String(head).trim().toLowerCase());
+                if (m.length > 0) {
+                    return [{
+                        token: head,
+                        expanded: value,
+                        element: this,
+                        score: 1.0 - m[0].score,
+                    }];
+                } else {
+                    return [{
+                        token: head,
+                        expanded: value,
+                        element: this,
+                        score: 0,
+                    }];
+                }
+            }
+        },
+    };
+
     var elementArray = {
         gen: function(data, target) {
             // container for the array form
@@ -653,24 +708,12 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
     };
 
     var elementBoolean = {
-        gen: function(data, target) {
-            var container = document.createElement('div');
-            container.className = 'knight-boolean';
-
-            var i = document.createElement('i');
-            ringMenu.create(i, container);
-            i.className = style.icons.iBoolean;
-
+        gen: function(data, anchor) {
             var input = document.createElement('input');
             input.setAttribute('type', 'checkbox');
-
-            formHelpers.create_ab(i, input, container);
-            container.knight_value = elementBoolean.value.bind(input);
-            container.knight_focus = formHelpers.focus.bind(input);
-
             input.checked = data;
 
-            formHelpers.bindToAnchor(container, target);
+            mixinElementSimple.create(anchor, 'knight-boolean', style.icons.iBoolean, input, elementBoolean.value);
         },
 
         value: function() {
@@ -682,23 +725,13 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
     };
 
     var elementNull = {
-        gen: function(data, target) {
-            var container = document.createElement('div');
-            container.className = 'knight-null';
-
-            var i = document.createElement('i');
-            ringMenu.create(i, container);
-            i.className = style.icons.iNull;
-
+        gen: function(data, anchor) {
             var p = document.createElement('p');
             p.className = 'knight-null';
             p.innerHTML = 'null';
+            p.setAttribute('tabindex', 0); // enables .focus()
 
-            formHelpers.create_ab(i, p, container);
-            container.knight_value = elementNull.value;
-            container.knight_focus = formHelpers.focus.bind(p);
-
-            formHelpers.bindToAnchor(container, target);
+            mixinElementSimple.create(anchor, 'knight-null', style.icons.iNull, p, elementNull.value);
         },
 
         value: function() {
@@ -707,24 +740,12 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
     };
 
     var elementNumber = {
-        gen: function(data, target) {
-            var container = document.createElement('div');
-            container.className = 'knight-number';
-
-            var i = document.createElement('i');
-            ringMenu.create(i, container);
-            i.className = style.icons.iNumber;
-
+        gen: function(data, anchor) {
             var input = document.createElement('input');
             input.setAttribute('type', 'number');
-
-            formHelpers.create_ab(i, input, container);
-            container.knight_value = elementNumber.value.bind(input);
-            container.knight_focus = formHelpers.focus.bind(input);
-
             input.value = data;
 
-            formHelpers.bindToAnchor(container, target);
+            mixinElementSimple.create(anchor, 'knight-number', style.icons.iNumber, input, elementNumber.value);
         },
 
         value: function() {
@@ -843,7 +864,10 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             var subcontainer = document.createElement('div');
             subcontainer.className = 'knight-objectrow';
 
-            var label = document.createElement('label');
+            // use a <p> element instead of <label>, because
+            // on Firefox label+contentEditable behaves strangely
+            // when selecting text or positioning the cursor
+            var label = document.createElement('p');
             label.className = 'knight-label';
             label.setAttribute('contentEditable', true);
             shim.textContentSet(label, k);
@@ -947,25 +971,12 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
     };
 
     var elementString = {
-        gen: function(data, target) {
-            var container = document.createElement('div');
-            container.className = 'knight-string';
-
-            var i = document.createElement('i');
-            ringMenu.create(i, container);
-            i.className = style.icons.iString;
-
+        gen: function(data, anchor) {
             var input = document.createElement('p');
             input.setAttribute('contentEditable', true);
-
-            formHelpers.create_ab(i, input, container);
-            container.knight_value = elementString.value.bind(input);
-            container.knight_focus = formHelpers.focus.bind(input);
-            container.knight_match = elementString.match.bind(container);
-
             shim.textContentSet(input, data);
 
-            formHelpers.bindToAnchor(container, target);
+            mixinElementSimple.create(anchor, 'knight-string', style.icons.iString, input, elementString.value);
         },
 
         value: function() {
@@ -974,55 +985,15 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
             return shim.textContentGet(element);
         },
-
-        match: function(tokens) {
-            if (tokens.length === 0) {
-                return [];
-            } else {
-                var head = tokens[0];
-                var value = String(this.knight_value()).toLowerCase();
-                var f = new Fuse([value], {
-                    includeScore: true,
-                });
-                var m = f.search(String(head).trim().toLowerCase());
-                if (m.length > 0) {
-                    return [{
-                        token: head,
-                        expanded: value,
-                        element: this,
-                        score: 1.0 - m[0].score,
-                    }];
-                } else {
-                    return [{
-                        token: head,
-                        expanded: value,
-                        element: this,
-                        score: 0,
-                    }];
-                }
-            }
-        },
     };
 
     var elementUnknown = {
-        gen: function(data, target) {
-            var container = document.createElement('div');
-            container.className = 'knight-null';
-
-            var i = document.createElement('i');
-            i.className = 'fa fa-fw fa-question';
-
+        gen: function(data, anchor) {
             var input = document.createElement('input');
-            ringMenu.create(i, container);
             input.className = 'knight-unkown';
-
-            formHelpers.create_ab(i, input, container);
-            container.knight_value = elementUnknown.value.bind(input);
-            container.knight_focus = formHelpers.focus.bind(input);
-
             input.value = data;
 
-            formHelpers.bindToAnchor(container, target);
+            mixinElementSimple.create(anchor, 'knight-unknown', style.icons.iUnknown, input, elementUnknown.value);
         },
 
         value: function() {
@@ -1211,13 +1182,21 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         }
     }
 
+    function validationDelay() {
+        window.setTimeout(validationLoop, 1000);
+    }
+
     function validationLoop() {
         var element = document.getElementById('knight-main');
         var schema = element.knight_schema;
         var value = element.knight_value();
-        fullValidation(value, schema, function() {
-            window.setTimeout(validationLoop, 1000);
-        });
+        var valueOld = element.knight_cachedvalue;
+        element.knight_cachedvalue = JSON.stringify(value);
+        if (element.knight_cachedvalue !== valueOld) {
+            fullValidation(value, schema, validationDelay);
+        } else {
+            validationDelay();
+        }
     }
 
 

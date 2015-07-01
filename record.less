@@ -138,6 +138,36 @@
     background-color: #fff;
 }
 
+// focus
+.knight-main:focus, .knight-main *:focus {
+    outline: none;
+    background-color: rgba(51, 122, 183, 0.3) !important;
+}
+
+.knight-a {
+    display: block;
+    float: left;
+    width: 26px;
+
+    > i {
+        line-height: 26px;
+    }
+}
+
+.knight-b {
+    display: block;
+    margin-left: 26px;
+    padding-right: 10px;
+
+    > * {
+        line-height: 26px;
+        margin: 0;
+        padding: 0;
+        word-wrap: break-word;
+    }
+}
+
+// checkbox for boolean input
 .knight-boolean > .knight-b > input {
     display: inline-block;
     width: 20px;
@@ -193,16 +223,10 @@
 
 .knight-label {
     float: left;
+    font-weight: 700;
     padding-right: 10px;
     text-align: right;
     width: 20%;
-}
-
-.knight-number {
-    input[type=number] {
-        background-color: inherit;
-        border: none;
-    }
 }
 
 .knight-null {
@@ -261,19 +285,9 @@
 .knight-unknown {
     float: left;
 
-    > .knight-a {
-        display: block;
-        float: left;
-        width: 26px;
-
-        > i {
-            line-height: 26px;
-        }
-    }
-    > .knight-b {
-        display: block;
-        margin-left: 26px;
-        padding-right: 10px;
+    .knight-b > input {
+        background-color: inherit;
+        border: none;
     }
 }
 
@@ -353,21 +367,6 @@
     z-index: 501;
 
     float: left;
-
-    > .knight-a {
-        display: block;
-        float: left;
-        width: 26px;
-
-        > i {
-            line-height: 26px;
-        }
-    }
-    > .knight-b {
-        display: block;
-        margin-left: 26px;
-        padding-right: 10px;
-    }
 }
 
 .knight-searchinput {
@@ -402,31 +401,35 @@
         padding: 10px;
         width: 300px;
         opacity: 0.8;
-
-        > .knight-a {
-            display: block;
-            float: left;
-            width: 26px;
-
-            > i {
-                line-height: 26px;
-            }
-        }
-        > .knight-b {
-            display: block;
-            margin-left: 26px;
-            padding-right: 10px;
-
-            > p {
-                line-height: 26px;
-                margin: 0;
-                padding: 0;
-                word-wrap: break-word;
-            }
-        }
     }
 
     > div:hover {
         opacity: 0.2;
     }
+
+    // add arrow to annotation
+    > div:before {
+        position: absolute;
+        top: 100%;
+        left: 50%;
+
+        border: solid transparent;
+        content: " ";
+        height: 0;
+        width: 0;
+        pointer-events: none;
+
+        border-color: rgba(0, 0, 0, 0);
+        border-top-color: #d9534f;
+        border-width: 10px;
+        margin-left: -10px;
+    }
 }
+// try to make it sticky
+@supports (position: sticky) {
+    .knight-annotation-error {
+        position: sticky;
+        top: 60px;
+    }
+}
+
