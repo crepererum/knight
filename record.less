@@ -139,28 +139,36 @@
 }
 
 // focus
-.knight-main:focus, .knight-main *:focus {
+.knight-main:focus, .knight-main *:focus,
+.knight-ringcontainer:focus, .knight-ringcontainer *:focus,
+.knight-searchcontainer:focus, .knight-searchcontainer *:focus {
     outline: none;
+}
+
+.knight-main:focus, .knight-main *:focus {
     background-color: rgba(51, 122, 183, 0.3) !important;
+}
+
+.knight-button {
+    cursor: pointer;
+}
+
+.knight-button:hover {
+    color: #337ab7;
 }
 
 .knight-a {
     display: block;
     float: left;
-    width: 26px;
-
-    > i {
-        line-height: 26px;
-    }
+    width: 22px;
 }
 
 .knight-b {
     display: block;
-    margin-left: 26px;
+    margin-left: 22px;
     padding-right: 10px;
 
     > * {
-        line-height: 26px;
         margin: 0;
         padding: 0;
         word-wrap: break-word;
@@ -285,9 +293,14 @@
 .knight-unknown {
     float: left;
 
-    .knight-b > input {
+    > .knight-a {
+        text-align: right;
+    }
+
+    > .knight-b > * {
         background-color: inherit;
         border: none;
+        padding: 0 5px;
     }
 }
 
@@ -295,7 +308,7 @@
 .knight-number,
 .knight-string,
 .knight-unknown {
-    .knight-b > input {
+    > .knight-b > * {
         width: 100%;
     }
 }
@@ -328,6 +341,12 @@
 }
 
 .knight-ringcontainer {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+
     height: 100px;
     width: 100px;
     border-radius: 50px;
@@ -367,10 +386,25 @@
     z-index: 501;
 
     float: left;
+
+    > .knight-a {
+        background-color: #fff;
+        border-top-left-radius: 3px;
+        border-bottom-left-radius: 3px;
+        line-height: 26px;
+        text-align: right;
+    }
+
+    > .knight-b {
+        line-height: 26px;
+    }
 }
 
 .knight-searchinput {
+    background-color: #fff;
     border: none;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
     font-size: 16px;
     line-height: 16px;
     height: 26px;
@@ -383,7 +417,8 @@
     box-shadow: #d9534f 0 0 10px inset;
 }
 
-.knight-annotation-error {
+.knight-annotation-errorschema,
+.knight-annotation-errorstate {
     position: relative;
 
     > div {
@@ -399,7 +434,9 @@
         cursor: default;
         font-weight: 700;
         padding: 10px;
-        width: 300px;
+        text-align: left; // required because parent element might be something else
+        min-width: 200px;
+        max-width: 300px;
         opacity: 0.8;
     }
 
@@ -427,7 +464,8 @@
 }
 // try to make it sticky
 @supports (position: sticky) {
-    .knight-annotation-error {
+    .knight-annotation-errorschema,
+    .knight-annotation-errorstate {
         position: sticky;
         top: 60px;
     }

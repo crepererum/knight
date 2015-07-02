@@ -22,7 +22,7 @@
 /*eslint-env browser */
 /*eslint camelcase: 0, comma-dangle: [2, "always-multiline"], quotes: [2, "single"] */
 
-require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, Fuse, tv4) {
+require(['jquery', 'base64', 'utf8', 'fuse', 'tv4', 'sortable'], function($, base64, utf8, Fuse, tv4, Sortable) {
   'use strict';
 
   $(function() {
@@ -366,7 +366,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         addIcon: function(container, angle, className, data) {
             var rad = angle / 360 * Math.PI * 2;
             var i = document.createElement('i');
-            i.className = className + ' knight-ringicon';
+            i.className = className + ' knight-ringicon knight-button';
             i.style.position = 'absolute';
             i.knight_container = container;
             i.knight_data = data;
@@ -401,9 +401,16 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             target.knight_show = element.knight_show;
             target.knight_hide = element.knight_hide;
             target.knight_match = element.knight_match;
+            target.knight_validate = element.knight_validate;
+            target.knight_navprev = element.knight_navprev;
+            target.knight_navnext = element.knight_navnext;
+            target.knight_navin = element.knight_navin;
+            target.knight_navout = element.knight_navout;
             target.knight_focus = element.knight_focus;
             target.knight_schema = element.knight_schema;
             target.knight_element = element;
+
+            element.knight_parent = target.knight_parent;
             element.knight_anchor = target;
         },
 
@@ -423,13 +430,13 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
         show: function() {
             this.knight_target.style.display = '';
-            this.className = 'fa fa-fw pull-right fa-chevron-down';
+            this.className = 'fa fa-fw pull-right fa-chevron-down' + ' knight-button';
             this.knight_statehidden = false;
         },
 
         hide: function() {
             this.knight_target.style.display = 'none';
-            this.className = 'fa fa-fw pull-right fa-chevron-right';
+            this.className = 'fa fa-fw pull-right fa-chevron-right' + ' knight-button';
             this.knight_statehidden = true;
         },
 
@@ -444,9 +451,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             return false;
         },
 
-        callbackEat: function(evt) {
-            evt.stopPropagation();
-            evt.preventDefault();
+        callbackEat: function() {
             return false;
         },
 
@@ -457,6 +462,26 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             var rect = this.getBoundingClientRect();
             window.scrollBy(0, rect.top - 50);
         },
+
+        callbackNavnext: function(evt, element) {
+            element.knight_navnext();
+            return false;
+        },
+
+        callbackNavprev: function(evt, element) {
+            element.knight_navprev();
+            return false;
+        },
+
+        callbackNavin: function(evt, element) {
+            element.knight_navin();
+            return false;
+        },
+
+        callbackNavout: function(evt, element) {
+            element.knight_navout();
+            return false;
+        },
     };
 
     var mixinElementSimple = {
@@ -466,12 +491,35 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
             var i = document.createElement('i');
             ringMenu.create(i, container);
-            i.className = iconClassName;
+            i.className = iconClassName + ' knight-button';
 
             formHelpers.create_ab(i, input, container);
             container.knight_value = valueFunction.bind(input);
             container.knight_focus = formHelpers.focus.bind(input);
             container.knight_match = mixinElementSimple.match.bind(container);
+            container.knight_validate = mixinElementSimple.validate.bind(container);
+
+            // navigation events usually arrow keys, which are eaten by the input
+            // element. therefore we need to bind it to the input element as well
+            container.knight_navnext = mixinElementSimple.navnext.bind(container);
+            container.knight_navprev = mixinElementSimple.navprev.bind(container);
+            container.knight_navin = mixinElementSimple.navin.bind(container);
+            container.knight_navout = mixinElementSimple.navout.bind(container);
+
+            input.knight_navnext = mixinElementSimple.navnext.bind(container);
+            input.knight_navprev = mixinElementSimple.navprev.bind(container);
+            input.knight_navin = mixinElementSimple.navin.bind(container);
+            input.knight_navout = mixinElementSimple.navout.bind(container);
+
+            eventDispatcher.bindToElement(container, 'navnext');
+            eventDispatcher.bindToElement(container, 'navprev');
+            eventDispatcher.bindToElement(container, 'navin');
+            eventDispatcher.bindToElement(container, 'navout');
+
+            eventDispatcher.bindToElement(input, 'navnext');
+            eventDispatcher.bindToElement(input, 'navprev');
+            eventDispatcher.bindToElement(input, 'navin');
+            eventDispatcher.bindToElement(input, 'navout');
 
             formHelpers.bindToAnchor(container, anchor);
         },
@@ -503,6 +551,32 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                 }
             }
         },
+
+        validate: function() {
+            /* noop */
+        },
+
+        navnext: function() {
+            if (this.knight_parent) {
+                this.knight_parent.knight_navnext(this);
+            }
+        },
+
+        navprev: function() {
+            if (this.knight_parent) {
+                this.knight_parent.knight_navprev(this);
+            }
+        },
+
+        navin: function() {
+            this.knight_focus();
+        },
+
+        navout: function() {
+            if (this.knight_parent) {
+                this.knight_parent.knight_focus();
+            }
+        },
     };
 
     var elementArray = {
@@ -514,6 +588,16 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             container.knight_subs = [];
             container.knight_value = elementArray.value.bind(container);
             container.knight_match = elementArray.match.bind(container);
+            container.knight_validate = elementArray.validate.bind(container);
+            container.knight_navnext = elementArray.navnext.bind(container);
+            container.knight_navprev = elementArray.navprev.bind(container);
+            container.knight_navin = elementArray.navin.bind(container);
+            container.knight_navout = elementArray.navout.bind(container);
+
+            eventDispatcher.bindToElement(container, 'navnext');
+            eventDispatcher.bindToElement(container, 'navprev');
+            eventDispatcher.bindToElement(container, 'navin');
+            eventDispatcher.bindToElement(container, 'navout');
 
             // head for metadata and buttons
             var head = document.createElement('div');
@@ -530,20 +614,20 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
             // type indicator
             var i = document.createElement('i');
-            i.className = style.icons.iArray;
+            i.className = style.icons.iArray + ' knight-button';
             ringMenu.create(i, container);
             head.appendChild(i);
 
             // add button
             var plus = document.createElement('i');
-            plus.className = style.icons.iAdd;
+            plus.className = style.icons.iAdd + ' knight-button';
             plus.knight_container = container;
             eventDispatcher.bindToElement(plus, 'arrayModifyAdd');
             head.appendChild(plus);
 
             // delete button
             var minus = document.createElement('i');
-            minus.className = style.icons.iRemove;
+            minus.className = style.icons.iRemove + ' knight-button';
             minus.knight_container = container;
             eventDispatcher.bindToElement(minus, 'arrayModifyDelete');
             head.appendChild(minus);
@@ -575,7 +659,10 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                 formHelpers.show.bind(toggle)();
             }
 
-            container.knight_focus = formHelpers.focus.bind(container);
+            // make it sortable
+            Sortable.create(body);
+
+            container.knight_focus = formHelpers.focus.bind(body);
 
             // assemble
             var margin = document.createElement('div');
@@ -603,6 +690,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         genSub: function(data, container) {
             var subcontainer = document.createElement('li');
             subcontainer.className = 'knight-arrayrow';
+            subcontainer.knight_parent = container;
             gen(data, subcontainer);
 
             container.knight_body.appendChild(subcontainer);
@@ -705,6 +793,58 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                 return result;
             }
         },
+
+        validate: function() {
+            for (var i = 0, ii = this.knight_subs.length; i < ii; ++i) {
+                this.knight_subs[i].knight_validate();
+            }
+        },
+
+        navnext: function(last) {
+            var idx;
+
+            if (last) {
+                last = last.knight_anchor || last;
+                idx = this.knight_subs.indexOf(last) + 1; // (-1 + 1)=0 when not found
+            } else {
+                idx = 0;
+            }
+
+            if (idx < this.knight_subs.length) {
+                this.knight_subs[idx].knight_focus();
+            } else if (this.knight_parent) {
+                this.knight_parent.knight_navnext(this);
+            }
+        },
+
+        navprev: function(last) {
+            var idx;
+
+            if (last) {
+                last = last.knight_anchor || last;
+                idx = this.knight_subs.indexOf(last) - 1; // (-1 - 1)=-2 when not found
+            } else {
+                idx = this.knight_subs.length - 1;
+            }
+
+            if (idx >= 0) {
+                this.knight_subs[idx].knight_focus();
+            } else if (this.knight_parent) {
+                this.knight_parent.knight_navprev(this);
+            }
+        },
+
+        navin: function() {
+            if (this.knight_subs.length > 0) {
+                this.knight_subs[0].knight_focus();
+            }
+        },
+
+        navout: function() {
+            if (this.knight_parent) {
+                this.knight_parent.knight_focus();
+            }
+        },
     };
 
     var elementBoolean = {
@@ -767,6 +907,16 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             container.knight_subs = [];
             container.knight_value = elementObject.value.bind(container);
             container.knight_match = elementObject.match.bind(container);
+            container.knight_validate = elementObject.validate.bind(container);
+            container.knight_navnext = elementObject.navnext.bind(container);
+            container.knight_navprev = elementObject.navprev.bind(container);
+            container.knight_navin = elementObject.navin.bind(container);
+            container.knight_navout = elementObject.navout.bind(container);
+
+            eventDispatcher.bindToElement(container, 'navnext');
+            eventDispatcher.bindToElement(container, 'navprev');
+            eventDispatcher.bindToElement(container, 'navin');
+            eventDispatcher.bindToElement(container, 'navout');
 
             // head for metadata and buttons
             var head = document.createElement('div');
@@ -779,20 +929,20 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
             // type indicator
             var i = document.createElement('i');
-            i.className = style.icons.iObject;
+            i.className = style.icons.iObject + ' knight-button';
             ringMenu.create(i, container);
             head.appendChild(i);
 
             // add button
             var plus = document.createElement('i');
-            plus.className = style.icons.iAdd;
+            plus.className = style.icons.iAdd + ' knight-button';
             plus.knight_container = container;
             eventDispatcher.bindToElement(plus, 'objectModifyAdd');
             head.appendChild(plus);
 
             // delete button
             var minus = document.createElement('i');
-            minus.className = style.icons.iRemove;
+            minus.className = style.icons.iRemove + ' knight-button';
             minus.knight_container = container;
             eventDispatcher.bindToElement(minus, 'objectModifyDelete');
             head.appendChild(minus);
@@ -825,6 +975,9 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             } else {
                 formHelpers.show.bind(toggle)();
             }
+
+            // make it sortable
+            Sortable.create(body);
 
             container.knight_focus = formHelpers.focus.bind(container);
 
@@ -870,10 +1023,25 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             var label = document.createElement('p');
             label.className = 'knight-label';
             label.setAttribute('contentEditable', true);
+            label.knight_parent = container;
+            label.knight_focus = formHelpers.focus.bind(label);
+            label.knight_validate = mixinElementSimple.validate.bind(label);
+            label.knight_navnext = mixinElementSimple.navnext.bind(label);
+            label.knight_navprev = mixinElementSimple.navprev.bind(label);
+            label.knight_navin = elementObject.navinLabel.bind(label);
+            label.knight_navout = mixinElementSimple.navout.bind(label);
+
+            eventDispatcher.bindToElement(label, 'navnext');
+            eventDispatcher.bindToElement(label, 'navprev');
+            eventDispatcher.bindToElement(label, 'navin');
+            eventDispatcher.bindToElement(label, 'navout');
+
             shim.textContentSet(label, k);
 
             var input = document.createElement('div');
             input.className = 'knight-sub';
+            input.knight_parent = container;
+            label.knight_input = input;
             gen(v, input);
 
             subcontainer.appendChild(label);
@@ -967,6 +1135,121 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
                 return result;
             }
+        },
+
+        validate: function() {
+            var i, ii, knownKeys;
+
+            knownKeys = {};
+            for (i = 0, ii = this.knight_subs.length; i < ii; ++i) {
+                this.knight_subs[i].knight_label.knight_validate();
+                this.knight_subs[i].knight_input.knight_validate();
+                var k = this.knight_subs[i].knight_key();
+                if (k in knownKeys) {
+                    ++knownKeys[k];
+                } else {
+                    knownKeys[k] = 1;
+                }
+            }
+
+            for (i = 0, ii = this.knight_subs.length; i < ii; ++i) {
+                var k = this.knight_subs[i].knight_key();
+                if (knownKeys[k] > 1) {
+                    annotations.add('errorstate', 'Duplicate key', this.knight_subs[i].knight_label);
+                }
+            }
+        },
+
+        indexOfLabel: function(subs, label) {
+            var idx = -1;
+            for (var i = 0, ii = subs.length; i < ii; ++i) {
+                if (subs[i].knight_label === label) {
+                    idx = i;
+                    break;
+                }
+            }
+            return idx;
+        },
+
+        indexOfInput: function(subs, input) {
+            var idx = -1;
+            for (var i = 0, ii = subs.length; i < ii; ++i) {
+                if (subs[i].knight_input === input) {
+                    idx = i;
+                    break;
+                }
+            }
+            return idx;
+        },
+
+        navnext: function(last) {
+            var idx;
+            var isInput = false;
+
+            if (last) {
+                last = last.knight_anchor || last;
+                idx = elementObject.indexOfInput(this.knight_subs, last) + 1; // (-1 + 1)=0 when not found
+                if (idx > 0) {
+                    isInput = true;
+                } else {
+                    idx = elementObject.indexOfLabel(this.knight_subs, last) + 1; // (-1 + 1)=0 when not found
+                }
+            } else {
+                idx = 0;
+            }
+
+            if (idx < this.knight_subs.length) {
+                if (isInput) {
+                    this.knight_subs[idx].knight_input.knight_focus();
+                } else {
+                    this.knight_subs[idx].knight_label.knight_focus();
+                }
+            } else if (this.knight_parent) {
+                this.knight_parent.knight_navnext(this);
+            }
+        },
+
+        navprev: function(last) {
+            var idx;
+            var isInput = false;
+
+            if (last) {
+                last = last.knight_anchor || last;
+                idx = elementObject.indexOfInput(this.knight_subs, last) - 1; // (-1 - 1)=-2 when not found
+                if (idx > -2) {
+                    isInput = true;
+                } else {
+                    idx = elementObject.indexOfLabel(this.knight_subs, last) - 1; // (-1 - 1)=-2 when not found
+                }
+            } else {
+                idx = this.knight_subs.length - 1;
+            }
+
+            if (idx >= 0) {
+                if (isInput) {
+                    this.knight_subs[idx].knight_input.knight_focus();
+                } else {
+                    this.knight_subs[idx].knight_label.knight_focus();
+                }
+            } else if (this.knight_parent) {
+                this.knight_parent.knight_navprev(this);
+            }
+        },
+
+        navin: function() {
+            if (this.knight_subs.length > 0) {
+                this.knight_subs[0].knight_label.knight_focus();
+            }
+        },
+
+        navout: function() {
+            if (this.knight_parent) {
+                this.knight_parent.knight_focus();
+            }
+        },
+
+        navinLabel: function() {
+            this.knight_input.knight_focus();
         },
     };
 
@@ -1101,14 +1384,17 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
             0x0D: 'ENTER',
             0x1B: 'ESCAPE',
             0x20: 'SPACE',
+            0x25: 'ARROWLEFT',
             0x26: 'ARROWUP',
+            0x27: 'ARROWRIGHT',
             0x28: 'ARROWDOWN',
         },
     };
 
     var annotations = {
         clear: function(type) {
-            var oldErrors = document.getElementsByClassName('knight-annotation-' + type);
+            // HTMLColleciton to Array, because we remove elements from the collection
+            var oldErrors = [].slice.call(document.getElementsByClassName('knight-annotation-' + type));
             for (var i = 0, ii = oldErrors.length; i < ii; ++i) {
                 oldErrors[i].knight_target.classList.remove('knight-status-error');
                 shim.remove(oldErrors[i]);
@@ -1143,7 +1429,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
         },
     };
 
-    function fullValidation(data, schema, callback) {
+    function fullValidation(element, data, schema, callback) {
         // FIXME thing about .validateMultiple
         var result = tv4.validateResult(data, schema);
 
@@ -1155,11 +1441,11 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                 tv4.addSchema(url, subschema);
 
                 // try again
-                fullValidation(data, schema, callback);
+                fullValidation(element, data, schema, callback);
             });
         } else {
             // clean up
-            annotations.clear('error');
+            annotations.clear('errorschema');
 
             if (!result.valid) {
                 // try to find affected element
@@ -1173,7 +1459,7 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
                 }
 
                 // add annotations to obj tree
-                annotations.add('error', result.error.message, target);
+                annotations.add('errorschema', result.error.message, target);
             }
 
             if (callback) {
@@ -1188,12 +1474,21 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
 
     function validationLoop() {
         var element = document.getElementById('knight-main');
+
+        // clean up
+        annotations.clear('errorstate');
+
+        // internal validation
+        // this state might change even if the resulting .knight_value()
+        // stays the same
+        element.knight_validate();
+
         var schema = element.knight_schema;
         var value = element.knight_value();
         var valueOld = element.knight_cachedvalue;
         element.knight_cachedvalue = JSON.stringify(value);
         if (element.knight_cachedvalue !== valueOld) {
-            fullValidation(value, schema, validationDelay);
+            fullValidation(element, value, schema, validationDelay);
         } else {
             validationDelay();
         }
@@ -1218,6 +1513,10 @@ require(['jquery', 'base64', 'utf8', 'fuse', 'tv4'], function($, base64, utf8, F
     eventDispatcher.register('ENTER', 'searchSubmit', searchBar.callbackSearchSubmit);
     eventDispatcher.register('ARROWUP', 'historyUp', searchBar.callbackHistoryUp);
     eventDispatcher.register('ARROWDOWN', 'historyDown', searchBar.callbackHistoryDown);
+    eventDispatcher.register('CTRL-ARROWUP', 'navprev', formHelpers.callbackNavprev);
+    eventDispatcher.register('CTRL-ARROWDOWN', 'navnext', formHelpers.callbackNavnext);
+    eventDispatcher.register('CTRL-ARROWRIGHT', 'navin', formHelpers.callbackNavin);
+    eventDispatcher.register('CTRL-ARROWLEFT', 'navout', formHelpers.callbackNavout);
 
     eventDispatcher.bindToElement(document, 'keyConvert');
 
